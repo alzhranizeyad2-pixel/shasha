@@ -50,7 +50,7 @@ async function torrent(q, req, res) {
 }
 
 async function probe(src) {
-  const j = JSON.parse(await run('ffprobe', ['-v', 'error', '-print_format', 'json', '-show_format', '-show_streams', src]));
+  const j = JSON.parse(await run('ffprobe', ['-v', 'error', '-print_format', 'json', '-show_format', '-show_streams', L(src)]));
   const S = j.streams || [], v = S.find(s => s.codec_type === 'video');
   const tag = (s, k) => s.tags && (s.tags[k] || s.tags[k.toUpperCase()]);
   return {
@@ -61,16 +61,33 @@ async function probe(src) {
       .filter(s => !/pgs|dvd|dvb|xsub/.test(s.codec))
   };
 }
+const L = u => String(u).replace(/^https?:\/\/[^/]+(?=\/torrent\?)/, 'http://127.0.0.1:' + PORT);
+const zlib = require('zlib');
+function unzip(b) {
+  const e = b.lastIndexOf(Buffer.from([0x50, 0x4b, 5, 6])); let n = b.readUInt16LE(e + 10), o = b.readUInt32LE(e + 16);
+  for (; n--;) {
+    const m = b.readUInt16LE(o + 10), cs = b.readUInt32LE(o + 20), nl = b.readUInt16LE(o + 28), xl = b.readUInt16LE(o + 30), cl = b.readUInt16LE(o + 32), lo = b.readUInt32LE(o + 42), nm = b.toString('utf8', o + 46, o + 46 + nl);
+    o += 46 + nl + xl + cl;
+    if (/\.(srt|vtt|ass|ssa)$/i.test(nm)) { const st = lo + 30 + b.readUInt16LE(lo + 26) + b.readUInt16LE(lo + 28), d = b.subarray(st, st + cs); return m ? zlib.inflateRawSync(d) : d; }
+  }
+  throw Error('لا توجد ترجمة داخل الأرشيف');
+}
+async function subproxy(q, res) {
+  const r = await fetch(q.get('url'), { headers: { 'User-Agent': 'Mozilla/5.0' }, redirect: 'follow' });
+  if (!r.ok) throw Error('فشل تحميل الترجمة ' + r.status);
+  let b = Buffer.from(await r.arrayBuffer()); if (b[0] === 0x50 && b[1] === 0x4b) b = unzip(b);
+  res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' }); res.end(b);
+}
 const cache = new Map();
 const pr = s => { if (!cache.has(s)) cache.set(s, probe(s).catch(e => { cache.delete(s); throw e; })); return cache.get(s); };
 
 async function play(q, res) {
   const src = q.get('src'), ss = +q.get('ss') || 0, a = +q.get('a') || 0, P = await pr(src);
   const copy = P.vcodec === 'h264' && (!P.pix || P.pix === 'yuv420p');
-  const args = ['-v', 'error', '-ss', String(ss), '-i', src, '-map', '0:v:0', '-map', `0:a:${a}?`, '-sn',
+  const args = ['-v', 'error', '-fflags', '+genpts', ...(/^https?:/i.test(src) ? ['-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5'] : []), '-ss', String(ss), '-i', L(src), '-map', '0:v:0', '-map', `0:a:${a}?`, '-sn',
     '-c:v', ...(copy ? ['copy'] : ['libx264', '-preset', 'veryfast', '-crf', '22', '-pix_fmt', 'yuv420p']),
     '-c:a', 'aac', '-ac', '2', '-b:a', '192k',
-    '-movflags', 'frag_keyframe+empty_moov+default_base_moof', '-f', 'mp4', 'pipe:1'];
+    '-avoid_negative_ts', 'make_zero', '-max_muxing_queue_size', '4096', '-movflags', 'frag_keyframe+empty_moov+default_base_moof', '-f', 'mp4', 'pipe:1'];
   const p = spawn('ffmpeg', args);
   p.on('error', () => res.destroy());
   res.writeHead(200, { 'Content-Type': 'video/mp4', 'Cache-Control': 'no-store' });
@@ -80,7 +97,7 @@ async function play(q, res) {
 }
 
 async function sub(q, res) {
-  const out = await run('ffmpeg', ['-v', 'error', '-i', q.get('src'), '-map', `0:s:${+q.get('i')}`, '-f', 'webvtt', 'pipe:1']);
+  const out = await run('ffmpeg', ['-v', 'error', '-i', L(q.get('src')), '-map', `0:s:${+q.get('i')}`, '-f', 'webvtt', 'pipe:1']);
   res.writeHead(200, { 'Content-Type': 'text/vtt; charset=utf-8' });
   res.end(out);
 }
@@ -99,6 +116,7 @@ http.createServer(async (req, res) => {
       case '/probe': res.setHeader('Content-Type', 'application/json'); return res.end(JSON.stringify(await pr(q.get('src'))));
       case '/play': return await play(q, res);
       case '/sub': return await sub(q, res);
+      case '/subproxy': return await subproxy(q, res);
       default: res.writeHead(404); return res.end();
     }
   } catch (e) {

@@ -97,12 +97,31 @@ button{background:none;border:0;cursor:pointer}
 #drop{position:fixed;inset:12px;z-index:99;border:3px dashed #fff8;border-radius:30px;display:grid;place-items:center;background:#000b;font-size:30px;font-weight:700}
 @media(max-width:640px){#tabs button{padding:7px 12px;font-size:15px}.ep i{flex-basis:110px}#vol{display:none}}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
+
+/* Apple TV */
+:root{--gl:rgba(70,70,78,.55)}
+#tabs{background:rgba(40,40,46,.55);box-shadow:inset 0 0 0 1px #ffffff1f,0 8px 30px #0006}
+.hero{height:76vh}.hero h1{letter-spacing:-.02em;text-shadow:0 4px 30px #0008}
+.btn{padding:13px 34px;font-size:18px;box-shadow:0 8px 24px #0005}
+.row h2{font-size:22px;font-weight:700;letter-spacing:-.01em}
+.card i{border-radius:14px;box-shadow:0 8px 24px #0007,inset 0 0 0 1px #ffffff14}
+.card:hover,.card:focus-visible{transform:scale(1.07) translateY(-4px)}
+.card span{color:#c9c9d0;font-size:14px}
+#detail:before{background:linear-gradient(0deg,#0b0b0d 18%,#0b0b0d88),linear-gradient(270deg,#0b0b0df0,#0b0b0d22)}
+.ep{border-radius:16px}.ep:hover{background:#ffffff14}
+#sheet>div{background:rgba(32,32,38,.8);backdrop-filter:blur(50px) saturate(1.8)}
+.top{background:linear-gradient(#000c,#0000)}.top b{font-size:24px;font-weight:900}
+.bot{left:3vw;right:3vw;bottom:max(16px,env(safe-area-inset-bottom));padding:14px 20px 10px;border-radius:28px;background:rgba(44,44,50,.62);backdrop-filter:blur(40px) saturate(1.8);box-shadow:inset 0 0 0 1px #ffffff1f,0 20px 60px #000a}
+#seek{height:5px}#seek::-webkit-slider-thumb{width:0;height:0}#seek:hover::-webkit-slider-thumb{width:14px;height:14px}
+.pn{bottom:132px;background:rgba(44,44,50,.8)}
+#sp{position:absolute;top:50%;left:50%;width:54px;height:54px;margin:-27px;border-radius:50%;border:4px solid #ffffff33;border-top-color:#fff;animation:sn .9s linear infinite;pointer-events:none}
+@keyframes sn{to{transform:rotate(360deg)}}
 </style></head><body>
 <nav id="tabs"><button data-t="home" class="on">الرئيسية</button><button data-t="search">بحث</button><button data-t="addons">الإضافات</button><button id="openf">فتح ملف</button></nav>
 <main id="view"></main>
 <div id="detail" class="hidden"></div><div id="sheet" class="hidden"></div>
 <div id="player" class="hidden idle">
-<video id="v" playsinline crossorigin="anonymous"></video><div id="sub"></div>
+<video id="v" playsinline crossorigin="anonymous"></video><div id="sp" class="hidden"></div><div id="sub"></div>
 <div id="msg" class="hidden"><div><h2 style="font-weight:900">تعذّر تشغيل الفيديو</h2><p id="mt" style="color:var(--dim);max-width:520px;margin:10px auto 0"></p></div></div>
 <div class="ov top"><button class="ib" id="back" aria-label="رجوع"><svg viewBox="0 0 24 24"><path d="M8.6 5.6 15 12l-6.4 6.4-1.4-1.4 5-5-5-5z"/></svg></button><b id="pt"></b></div>
 <div class="ov bot"><div class="cr"><span class="tm" id="ct">0:00</span><input id="seek" type="range" min="0" max="1000" value="0" aria-label="شريط التقدم"><span class="tm" id="dt">0:00</span></div>
@@ -145,7 +164,7 @@ function search(){
  let t;$('#q').oninput=e=>{clearTimeout(t);t=setTimeout(()=>run(e.target.value.trim()),400)};
  async function run(q){const R=$('#res');R.innerHTML='';if(!q)return;
   addons.forEach(a=>(a.m.catalogs||[]).filter(c=>(c.extra||[]).some(x=>x.name==='search')||(c.extraSupported||[]).includes('search')).forEach(async c=>{try{const ms=(await J(`${a.base}/catalog/${c.type}/${c.id}/search=${encodeURIComponent(q)}.json`)).metas||[];if(ms.length&&$('#q').value.trim()===q)R.append(row(`${c.type==='movie'?'أفلام':c.type==='series'?'مسلسلات':c.type} — ${a.m.name}`,ms))}catch{}}))}}
-const PRE=[['Torrentio','تورنت وديبريد من مواقع كثيرة','https://torrentio.strem.fun',1],['Comet','بديل Torrentio يدعم الديبريد','https://comet.elfhosted.com',1],['MediaFusion','أفلام ومسلسلات وقنوات وروابط متعددة','https://mediafusion.elfhosted.com',1],['Anime Kitsu','قوائم وروابط الأنمي','https://anime-kitsu.strem.fun',0],['WatchHub','يفتح العمل في خدمات البث المتاحة','https://watchhub.strem.io',0]];
+const PRE=[['Torrentio','تورنت وديبريد من مواقع كثيرة','https://torrentio.strem.fun',1],['Comet','بديل Torrentio يدعم الديبريد','https://comet.elfhosted.com',1],['MediaFusion','أفلام ومسلسلات وقنوات وروابط متعددة','https://mediafusion.elfhosted.com',1],['SubDL','ترجمات SubDL — عربية وعشرات اللغات','https://subdl.strem.top',1],['SubSource','ترجمات SubSource — دقيقة وتدعم العربية','https://subsource.strem.top',1],['Anime Kitsu','قوائم وروابط الأنمي','https://anime-kitsu.strem.fun',0],['WatchHub','يفتح العمل في خدمات البث المتاحة','https://watchhub.strem.io',0]];
 function addonsPage(){
  const v=$('#view');v.innerHTML=`<div class="pg"><h1>الإضافات</h1><p>الصق رابط أي إضافة ستريميو (manifest.json أو stremio://) أو ثبّت من المقترحات.</p>
  <div class="in"><input id="au" dir="ltr" placeholder="https://…/manifest.json"><button class="btn" id="aa" style="margin:0">تثبيت</button></div>
@@ -180,9 +199,9 @@ function streams(f,vid,title){
    b.onclick=()=>pick(s,{type:f.type,id:vid,title,poster:f.poster});g.append(b)});$('#sr').append(g)}}catch{}
   if(!--left)$('#sl').textContent=n?`تم العثور على ${n} رابط`:'لم يتم العثور على روابط. جرّب إضافة أخرى.'});}
 function pick(s,c){
- if(s.url){$('#sheet').classList.add('hidden');play(s.url,c,s.subtitles)}
+ if(s.url){$('#sheet').classList.add('hidden');play(s.url,c,s.subtitles,s.behaviorHints)}
  else if(s.infoHash){const tr=(s.sources||[]).filter(x=>x.startsWith('tracker:')).map(x=>'&tr='+encodeURIComponent(x.slice(8))).join('');
-  if(engOn){$('#sheet').classList.add('hidden');play(`${eng}/torrent?ih=${s.infoHash}&fi=${s.fileIdx??''}${tr}`,c,s.subtitles);toast('جاري الاتصال بالتورنت… قد يستغرق دقيقة',6000)}
+  if(engOn){$('#sheet').classList.add('hidden');play(`${eng}/torrent?ih=${s.infoHash}&fi=${s.fileIdx??''}${tr}`,c,s.subtitles,s.behaviorHints);toast('جاري الاتصال بالتورنت… قد يستغرق دقيقة',6000)}
   else{const m=`magnet:?xt=urn:btih:${s.infoHash}&dn=${encodeURIComponent(c.title)}${tr}`;navigator.clipboard?.writeText(m).catch(()=>{});toast('هذا تورنت: شغّل المحرك المحلي (server.js) للتشغيل المباشر، أو فعّل الديبريد في الإضافة. تم نسخ الماغنت.',7000)}}
  else if(s.externalUrl)window.open(s.externalUrl,'_blank','noopener')}
 /* ---------- المشغّل ---------- */
@@ -205,10 +224,17 @@ function parse(x){x=x.replace(/^\uFEFF/,'').replace(/\r/g,'');const o=[];
  if(/^\[Script Info\]/im.test(x)||/^Dialogue:/m.test(x)){let fm=[];for(const l of x.split('\n')){if(/^Format:/.test(l)&&/Text/.test(l))fm=l.slice(7).split(',').map(y=>y.trim());else if(l.startsWith('Dialogue:')){const p=l.slice(9).split(','),si=fm.indexOf('Start'),ei=fm.indexOf('End'),ti=fm.indexOf('Text');const t=p.slice(ti<0?9:ti).join(',').replace(/\{[^}]*\}/g,'').replace(/\\N/gi,'\n').trim();if(t)o.push({s:ts(p[si<0?1:si]),e:ts(p[ei<0?2:ei]),t:esc(t).replace(/\n/g,'<br>')})}}}
  else for(const b of x.split(/\n\n+/)){const ls=b.split('\n'),i=ls.findIndex(l=>l.includes('-->'));if(i<0)continue;const[a,c]=ls[i].split('-->');const t=ls.slice(i+1).join('\n').replace(/\{\\an?\d\}/g,'').replace(/<(?!\/?[ib]>)[^>]*>/g,'').trim();if(t)o.push({s:ts(a),e:ts(c.trim().split(/\s/)[0]),t:t.replace(/\n/g,'<br>')})}
  return o.sort((a,b)=>a.s-b.s)}
-async function setSub(i){curSub=i;cues=[];SB.innerHTML='';SB._h='';if(i>=0){try{const t=tracks[i],buf=t.file?await t.file.arrayBuffer():await(await fetch(t.url)).arrayBuffer();cues=parse(dec(buf));if(!cues.length)toast('ملف الترجمة فارغ أو غير مدعوم')}catch{toast('تعذّر تحميل الترجمة. جرّب ترجمة أخرى.');curSub=-1}}drawS()}
+async function setSub(i){curSub=i;cues=[];SB.innerHTML='';SB._h='';if(i>=0){try{const t=tracks[i],px=()=>fetch(`${eng}/subproxy?url=${encodeURIComponent(t.url)}`).then(r=>r.arrayBuffer());let buf;
+  if(t.file)buf=await t.file.arrayBuffer();else{try{buf=await(await fetch(t.url)).arrayBuffer()}catch{buf=engOn?await px():Promise.reject()}if(engOn&&new Uint8Array(buf)[0]===80&&new Uint8Array(buf)[1]===75)buf=await px()}
+  if(!t.file)LS.s('slang',lc(t.lang));cues=parse(dec(buf));if(!cues.length)toast('ملف الترجمة فارغ أو غير مدعوم')}catch{toast('تعذّر تحميل الترجمة. جرّب ترجمة أخرى.');curSub=-1}}drawS()}
 const lang=c=>{try{return new Intl.DisplayNames(['ar'],{type:'language'}).of(c)}catch{return c}};
-async function loadSubs(c,own){tracks=[];curSub=-1;(own||[]).forEach(s=>tracks.push({url:s.url,lang:s.lang,src:'الرابط'}));drawS();
- for(const a of addons.filter(a=>has(a,'subtitles',c.id)))J(`${a.base}/subtitles/${c.type}/${encodeURIComponent(c.id)}.json`).then(r=>{(r.subtitles||[]).forEach(s=>tracks.push({url:s.url,lang:s.lang,src:a.m.name}));tracks.sort((x,y)=>{const k=l=>/^(ara|ar)/.test(l)?0:/^(eng|en)/.test(l)?1:2;return k(x.lang)-k(y.lang)});if(curSub>=0)curSub=-1;drawS()}).catch(()=>{})}
+const lc=l=>{l=String(l||'und').toLowerCase();return/^(ar|ara|arabic|عرب)/.test(l)?'ara':/^(en|eng|english)/.test(l)?'eng':l};
+const xs=k=>k&&(k.filename||k.videoSize)?'/'+[k.filename&&'filename='+encodeURIComponent(k.filename),k.videoSize&&'videoSize='+k.videoSize].filter(Boolean).join('&'):'';
+async function loadSubs(c,own,k){tracks=[];curSub=-1;(own||[]).forEach(s=>tracks.push({url:s.url,lang:s.lang,src:'الرابط'}));drawS();const pref=LS.g('slang','ara'),id=encodeURIComponent(c.id);let auto=true;
+ for(const a of addons.filter(a=>has(a,'subtitles',c.id))){const u=`${a.base}/subtitles/${c.type}/${id}`;
+  J(u+xs(k)+'.json').catch(()=>J(u+'.json')).then(r=>{const cur=tracks[curSub];(r.subtitles||[]).forEach(s=>{if(s.url&&!tracks.some(t=>t.url===s.url))tracks.push({url:s.url,lang:s.lang,src:a.m.name})});
+   const kk=l=>lc(l)==='ara'?0:lc(l)==='eng'?1:2;tracks.sort((x,y)=>kk(x.lang)-kk(y.lang));curSub=cur?tracks.indexOf(cur):-1;drawS();
+   if(auto&&curSub<0){const i=tracks.findIndex(t=>lc(t.lang)===pref&&!t.file);if(i>=0){auto=false;setSub(i)}}}).catch(()=>{})}}
 function drawS(){const p=$('#pS');let h='<h5>الترجمة</h5><button class="o'+(curSub<0?' on':'')+'" data-i="-1">بدون ترجمة</button>';
  tracks.slice(0,80).forEach((t,i)=>h+=`<button class="o${i===curSub?' on':''}" data-i="${i}"><span>${esc(t.file?t.lang:lang(t.lang))}</span><small style="color:var(--dim)">${esc(t.src)}</small></button>`);
  h+=`<button class="o" id="lf">+ فتح ملف ترجمة (srt / vtt / ass)</button><h5>المظهر والتوقيت</h5><div class="sg"><span>التأخير ${SS.delay.toFixed(1)}ث</span><button data-d="-.5">−</button><button data-d=".5">+</button></div><div class="sg"><span>الحجم ${SS.size}%</span><button data-z="-10">−</button><button data-z="10">+</button></div><button class="o${SS.bg?' on':''}" id="sbg">خلفية للنص</button>`;
@@ -220,10 +246,10 @@ function drawG(){const p=$('#pG');let h='<h5>السرعة</h5>'+[.5,.75,1,1.25,1
  if(PR&&PR.audio.length>1)h+='<h5>الصوت</h5>'+PR.audio.map(x=>`<button class="o${x.i===ai?' on':''}" data-e="${x.i}">${esc(x.title||lang(x.lang)||'مسار '+(x.i+1))} · ${esc(x.codec)}</button>`).join('');const at=PR?null:V.audioTracks;if(at&&at.length>1){h+='<h5>الصوت</h5>';for(let i=0;i<at.length;i++)h+=`<button class="o${at[i].enabled?' on':''}" data-a="${i}">${esc(at[i].label||lang(at[i].language)||'مسار '+(i+1))}</button>`}
  h+=`<h5>العرض</h5><button class="o${V.style.objectFit==='cover'?' on':''}" id="fit">ملء الشاشة بالقص</button>`;p.innerHTML=h;
  p.querySelectorAll('[data-e]').forEach(b=>b.onclick=()=>{ai=+b.dataset.e;startSrc(TT());closeP()});p.querySelectorAll('[data-r]').forEach(b=>b.onclick=()=>{V.playbackRate=+b.dataset.r;drawG()});p.querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>{for(let i=0;i<at.length;i++)at[i].enabled=i===+b.dataset.a;drawG()});$('#fit',p).onclick=()=>{V.style.objectFit=V.style.objectFit==='cover'?'contain':'cover';drawG()}}
-function play(url,c,own){ctx=c||{};P.classList.remove('hidden');document.body.classList.add('lock');$('#msg').classList.add('hidden');$('#pt').textContent=ctx.title||'';cues=[];SB.innerHTML='';
+function play(url,c,own,hint){rt=0;$('#sp').classList.remove('hidden');ctx=c||{};P.classList.remove('hidden');document.body.classList.add('lock');$('#msg').classList.add('hidden');$('#pt').textContent=ctx.title||'';cues=[];SB.innerHTML='';
  if(hls){hls.destroy();hls=null}
  if(/\.m3u8(\?|$)/i.test(url)&&window.Hls&&Hls.isSupported()){hls=new Hls();hls.loadSource(url);hls.attachMedia(V)}else if(engOn&&!url.startsWith('blob:')){PR=null;off=0;ai=0}else{PR=null;off=0;V.src=url}
- V.dataset.u=url;const E2=!hls&&engOn&&!url.startsWith('blob:');if(!E2)V.play().catch(()=>{});loadSubs(ctx,own);styleS();wake();if(E2)probe(url)}
+ V.dataset.u=url;const E2=!hls&&engOn&&!url.startsWith('blob:');if(!E2)V.play().catch(()=>{});loadSubs(ctx,own,hint);styleS();wake();if(E2)probe(url)}
 function stop(){V.pause();if(hls){hls.destroy();hls=null}V.removeAttribute('src');V.load();P.classList.add('hidden');$('#pS').classList.add('hidden');$('#pG').classList.add('hidden');document.body.classList.toggle('lock',!$('#detail').classList.contains('hidden'));if(document.fullscreenElement)document.exitFullscreen();if(tab==='home')home()}
 const save=()=>{const u=V.dataset.u;if(!u||u.startsWith('blob:')||!DUR())return;const p=LS.g('pos',{});p[u]=TT();LS.s('pos',p);let c=LS.g('cont',[]).filter(x=>x.url!==u);if(TT()>30&&TT()<DUR()*.95)c.unshift({url:u,ctx,title:ctx.title,poster:ctx.poster});LS.s('cont',c.slice(0,12))};
 V.onloadedmetadata=()=>{const p=LS.g('pos',{})[V.dataset.u];if(!PR&&p>10&&p<V.duration-30){V.currentTime=p;toast('تم الاستئناف من '+fmt(p))}$('#dt').textContent=fmt(DUR())};
@@ -231,8 +257,10 @@ V.ontimeupdate=()=>{const d=DUR();if(!drag&&d){const s=$('#seek');s.value=TT()/d
 setInterval(()=>{if(!V.paused)save()},5000);
 V.onplay=V.onpause=()=>{$('#pp').innerHTML=V.paused?I.play:I.pause;$('#pp').setAttribute('aria-label',V.paused?'تشغيل':'إيقاف');wake()};
 V.onvolumechange=()=>{$('#mu').innerHTML=V.muted||!V.volume?I.mute:I.vol;$('#vol').value=V.muted?0:V.volume};
-V.onended=()=>{save();stop()};
-V.onerror=()=>{const e=V.error;if(hls||!V.dataset.u)return;$('#mt').textContent=e&&e.code===4?'المتصفح لا يدعم ترميز هذا الملف (غالباً HEVC أو صوت AC3/DTS داخل MKV). جرّب Safari أو Edge، أو اختر رابطاً بترميز H.264 / AAC.':'حدث خطأ أثناء التحميل. جرّب رابطاً آخر.';$('#msg').classList.remove('hidden')};
+let rt=0;
+V.onended=()=>{const d=DUR();if(d&&TT()<d-20){if(PR&&rt++<3){toast('انقطع البث، جاري الاستئناف…');return startSrc(TT())}$('#mt').textContent='توقف البث قبل نهاية الفيلم. جرّب رابطاً آخر.';return $('#msg').classList.remove('hidden')}save();stop()};
+V.onwaiting=()=>$('#sp').classList.remove('hidden');V.onplaying=V.oncanplay=()=>$('#sp').classList.add('hidden');
+V.onerror=()=>{const e=V.error;if(hls||!V.dataset.u)return;if(PR&&rt++<3){toast('انقطع البث، جاري الاستئناف…');return startSrc(TT())}$('#mt').textContent=e&&e.code===4?'المتصفح لا يدعم ترميز هذا الملف (غالباً HEVC أو صوت AC3/DTS داخل MKV). جرّب Safari أو Edge، أو اختر رابطاً بترميز H.264 / AAC.':'حدث خطأ أثناء التحميل. جرّب رابطاً آخر.';$('#msg').classList.remove('hidden')};
 $('#pp').innerHTML=I.play;$('#mu').innerHTML=I.vol;
 const tog=()=>V.paused?V.play():V.pause(),seekBy=d=>seekTo(TT()+d);
 $('#pp').onclick=tog;V.onclick=()=>{closeP();tog()};V.ondblclick=()=>fs();$('#b10').onclick=()=>seekBy(-10);$('#f10').onclick=()=>seekBy(10);$('#mu').onclick=()=>V.muted=!V.muted;$('#vol').oninput=e=>{V.muted=false;V.volume=+e.target.value};
