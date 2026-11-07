@@ -208,9 +208,9 @@ function pick(s,c){
 const V=$('#v'),P=$('#player'),SB=$('#sub'),I={play:'<svg viewBox="0 0 24 24"><path d="M7 4.5v15l13-7.5z"/></svg>',pause:'<svg viewBox="0 0 24 24"><path d="M6 4h4v16H6zm8 0h4v16h-4z"/></svg>',vol:'<svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 4V5L7 9zm13.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4z"/></svg>',mute:'<svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 4V5L7 9zm13 .4 1.4-1.4 2.1 2.1 2.1-2.1L23 9.4 20.9 11.5 23 13.6 21.6 15l-2.1-2.1L17.4 15 16 13.6l2.1-2.1z"/></svg>'};
 let cues=[],ctx={},hls,tracks=[],curSub=-1,drag=0,idleT;
 let eng=LS.g('eng',location.protocol.startsWith('http')?location.origin:'http://localhost:7070'),engOn=false,PR=null,off=0,ai=0;
-const TT=()=>off+V.currentTime,DUR=()=>PR?PR.duration:V.duration;
+const TT=()=>off+V.currentTime,DUR=()=>PR?(PR.duration||V.duration):V.duration;
 async function ping(){try{await fetch(eng+'/ping');engOn=true}catch{engOn=false}const s=$('#es');if(s)s.textContent=engOn?'المحرك متصل ✓ — التورنت وكل الترميزات والترجمات المدمجة مفعّلة':'المحرك غير متصل'}
-async function probe(url){try{PR=await J(`${eng}/probe?src=${encodeURIComponent(url)}`)}catch{PR=null}
+async function probe(url){try{PR=await J(`${eng}/probe?src=${encodeURIComponent(url)}`)}catch{PR={duration:0,audio:[],subs:[]}}
  const p=LS.g('pos',{})[url]||0;
  if(PR){const n=PR.subs.length;tracks.unshift(...PR.subs.map(s=>({url:`${eng}/sub?src=${encodeURIComponent(url)}&i=${s.i}`,lang:s.lang||'und',src:'مدمجة في الملف'+(s.title?' · '+s.title:'')})));if(curSub>=0)curSub+=n;drawS();$('#dt').textContent=fmt(PR.duration)}
  startSrc(p>10&&(!PR||p<PR.duration-30)?p:0)}
@@ -260,7 +260,7 @@ V.onvolumechange=()=>{$('#mu').innerHTML=V.muted||!V.volume?I.mute:I.vol;$('#vol
 let rt=0;
 V.onended=()=>{const d=DUR();if(d&&TT()<d-20){if(PR&&rt++<3){toast('انقطع البث، جاري الاستئناف…');return startSrc(TT())}$('#mt').textContent='توقف البث قبل نهاية الفيلم. جرّب رابطاً آخر.';return $('#msg').classList.remove('hidden')}save();stop()};
 V.onwaiting=()=>$('#sp').classList.remove('hidden');V.onplaying=V.oncanplay=()=>$('#sp').classList.add('hidden');
-V.onerror=()=>{const e=V.error;if(hls||!V.dataset.u)return;if(PR&&rt++<3){toast('انقطع البث، جاري الاستئناف…');return startSrc(TT())}$('#mt').textContent=e&&e.code===4?'المتصفح لا يدعم ترميز هذا الملف (غالباً HEVC أو صوت AC3/DTS داخل MKV). جرّب Safari أو Edge، أو اختر رابطاً بترميز H.264 / AAC.':'حدث خطأ أثناء التحميل. جرّب رابطاً آخر.';$('#msg').classList.remove('hidden')};
+V.onerror=()=>{const e=V.error;if(hls||!V.dataset.u)return;if(PR&&rt++<3){toast('انقطع البث، جاري الاستئناف…');return startSrc(TT())}if(PR&&V.src.includes('/play')){const ac=new AbortController();fetch(V.src,{signal:ac.signal}).then(r=>{if(r.ok){ac.abort();return null}return r.text()}).then(t=>{if(t){$('#mt').textContent='خطأ من المحرك: '+t;$('#msg').classList.remove('hidden')}}).catch(()=>{})}$('#mt').textContent=!engOn?'المحرك المحلي غير متصل. شغّل server.js وافتح الموقع من عنوانه نفسه (مثل http://localhost:7070) وليس من الملف مباشرة.':e&&e.code===4?'المتصفح لا يدعم ترميز هذا الملف (غالباً HEVC أو صوت AC3/DTS داخل MKV). جرّب Safari أو Edge، أو اختر رابطاً بترميز H.264 / AAC.':'حدث خطأ أثناء التحميل. جرّب رابطاً آخر.';$('#msg').classList.remove('hidden')};
 $('#pp').innerHTML=I.play;$('#mu').innerHTML=I.vol;
 const tog=()=>V.paused?V.play():V.pause(),seekBy=d=>seekTo(TT()+d);
 $('#pp').onclick=tog;V.onclick=()=>{closeP();tog()};V.ondblclick=()=>fs();$('#b10').onclick=()=>seekBy(-10);$('#f10').onclick=()=>seekBy(10);$('#mu').onclick=()=>V.muted=!V.muted;$('#vol').oninput=e=>{V.muted=false;V.volume=+e.target.value};

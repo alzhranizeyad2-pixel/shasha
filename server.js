@@ -88,11 +88,14 @@ async function play(q, res) {
     '-c:v', ...(copy ? ['copy'] : ['libx264', '-preset', 'veryfast', '-crf', '22', '-pix_fmt', 'yuv420p']),
     '-c:a', 'aac', '-ac', '2', '-b:a', '192k',
     '-avoid_negative_ts', 'make_zero', '-max_muxing_queue_size', '4096', '-movflags', 'frag_keyframe+empty_moov+default_base_moof', '-f', 'mp4', 'pipe:1'];
-  const p = spawn('ffmpeg', args);
-  p.on('error', () => res.destroy());
-  res.writeHead(200, { 'Content-Type': 'video/mp4', 'Cache-Control': 'no-store' });
-  p.stdout.pipe(res);
-  p.stderr.on('data', d => process.stderr.write(d));
+  const p = spawn('ffmpeg', args); let err = '', sent = 0;
+  p.on('error', () => { if (!res.headersSent) res.writeHead(500); res.end('ffmpeg غير موجود على الخادم'); });
+  p.stderr.on('data', d => { err += d; process.stderr.write(d); });
+  p.stdout.on('data', d => {
+    if (!sent) { sent = 1; res.writeHead(200, { 'Content-Type': 'video/mp4', 'Cache-Control': 'no-store' }); }
+    if (!res.write(d)) { p.stdout.pause(); res.once('drain', () => p.stdout.resume()); }
+  });
+  p.on('close', () => { if (sent) return res.end(); if (!res.headersSent) res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' }); res.end(err.slice(-500) || 'فشل ffmpeg في قراءة الملف'); });
   res.on('close', () => p.kill('SIGKILL'));
 }
 
