@@ -1,4 +1,4 @@
-// محرك شاشة v2 — يبث التورنت، يشغّل الفيديو مباشرة إن أمكن، ويحوّله بذكاء عند الحاجة، ويستخرج الترجمات.
+// محرك شاشة v3 — يبث التورنت، يشغّل الفيديو مباشرة إن أمكن، ويحوّله بذكاء عند الحاجة، ويستخرج الترجمات.
 // المتطلبات: Node 18+ و ffmpeg (مع ffprobe) في PATH.   التشغيل: npm install && node server.js
 // متغيرات اختيارية: PORT, ALLOW_PRIVATE=1 (السماح بروابط الشبكة المحلية), HWACCEL=0 (تعطيل تسريع الكرت), IDLE_MIN (دقائق قبل حذف التورنت الخامل)
 const http = require('http'), fs = require('fs'), os = require('os'), path = require('path'), zlib = require('zlib'), net = require('net'), dns = require('dns').promises;
@@ -11,7 +11,8 @@ process.on('unhandledRejection', e => console.error('[وعد مرفوض]', e && 
 let WebTorrent; try { WebTorrent = require('webtorrent'); } catch { console.warn('webtorrent غير مثبت: شغّل npm install'); }
 const PORT = +process.env.PORT || 7070, TMP = path.join(os.tmpdir(), 'shasha');
 const IDLE = (+process.env.IDLE_MIN || 15) * 60e3, ALLOW_PRIVATE = process.env.ALLOW_PRIVATE === '1';
-const wt = WebTorrent && new WebTorrent({ maxConns: 80 });
+const PRE_IDLE = 3 * 60e3, MAXKEEP = +process.env.MAX_TORRENTS || 3, MB = 1048576;   // تحميل مسبق غير مستخدم يُحذف بعد 3 دقائق، ونحتفظ بحد أقصى 3 تورنتات
+const wt = WebTorrent && new WebTorrent({ maxConns: 120 });
 if (wt) wt.on('error', e => console.error('[webtorrent]', e.message));
 const MIME = { '.mp4': 'video/mp4', '.m4v': 'video/mp4', '.mkv': 'video/x-matroska', '.webm': 'video/webm', '.avi': 'video/x-msvideo', '.mov': 'video/quicktime' };
 const VID = /\.(mkv|mp4|m4v|webm|avi|mov|ts)$/i;
@@ -60,9 +61,14 @@ const CAP = { zscale: false, nvenc: false, vtb: false };
 })();
 
 // ---------- التورنت ----------
-const meta = new Map();   // infoHash -> { last, active }
+// الأفكار المأخوذة من torrentplayer: (1) نطلب أولاً ما يحتاجه المشغّل: رأس الملف + فهرسه في النهاية (moov في MP4 / Cues في MKV)
+// (2) نافذة قراءة مسبقة تتبع موضع التشغيل وحجمها من معدل بت الفيديو (3) عند القفز تُلغى النافذة القديمة وتبدأ نافذة جديدة عند الموضع الجديد
+// (4) تحميل مسبق هادئ للأفضل قبل الضغط على تشغيل (5) يُحمَّل ملف الفيديو المختار فقط لا حزمة الموسم كلها
+const meta = new Map();   // infoHash -> { last, active, pre, played, primed, preAt }
 const touch = ih => { const m = meta.get(ih) || { active: 0 }; m.last = Date.now(); meta.set(ih, m); return m; };
 const IH = /^([0-9a-f]{40}|[a-z2-7]{32})$/i;
+const tkey = (ih, fi) => 'T|' + String(ih || '').toLowerCase() + '|' + (fi ?? '');   // مفتاح موحّد لتورنت+ملف
+const durs = new Map();                                                              // tkey -> مدة الفيديو (لحساب معدل البت)
 
 async function ensureTorrent(ih, trackers) {
   if (!wt) throw new HttpErr(500, 'webtorrent غير مثبت: شغّل npm install');
@@ -70,13 +76,16 @@ async function ensureTorrent(ih, trackers) {
   ih = ih.toLowerCase();
   let t = await wt.get(ih);
   if (!t) {
-    // مشغّل واحد: نحرر مساحة التورنتات الأخرى غير المستخدمة
-    for (const o of [...wt.torrents]) { const m = meta.get(o.infoHash); if (o.infoHash !== ih && (!m || m.active <= 0)) o.destroy({ destroyStore: true }, () => {}); }
+    // نحتفظ بعدد محدود من التورنتات (المشغَّل + المحمَّل مسبقاً)، ونحذف الأقدم غير المستخدم فقط
+    const idle = [...wt.torrents].filter(o => { const m = meta.get(o.infoHash); return !m || m.active <= 0; })
+      .sort((x, y) => ((meta.get(x.infoHash) || {}).last || 0) - ((meta.get(y.infoHash) || {}).last || 0));
+    let n = wt.torrents.length;
+    while (n >= MAXKEEP && idle.length) { const o = idle.shift(); meta.delete(o.infoHash); o.destroy({ destroyStore: true }, () => {}); n--; }
     const trs = [...new Set([...(trackers || []), ...TRACKERS])];
     t = wt.add(`magnet:?xt=urn:btih:${ih}` + trs.map(x => '&tr=' + encodeURIComponent(x)).join(''), { path: TMP });
     t.on('error', e => console.error('[تورنت]', e.message));
   }
-  touch(ih);
+  touch(t.infoHash || ih);
   return t;
 }
 const waitReady = (t, ms) => new Promise((ok, no) => {
@@ -89,29 +98,90 @@ const pickFile = (t, fi) => {
   let f = fi !== undefined && fi !== null && fi !== '' ? t.files[+fi] : null;
   return f || t.files.filter(x => VID.test(x.name)).sort((a, b) => b.length - a.length)[0];
 };
-const tinfo = t => ({ peers: t.numPeers, down: Math.round(t.downloadSpeed), progress: +t.progress.toFixed(4), ready: !!t.ready, name: t.name || '' });
+const tinfo = t => ({ peers: t.numPeers, down: Math.round(t.downloadSpeed), up: Math.round(t.uploadSpeed || 0), progress: +t.progress.toFixed(4), ready: !!t.ready, name: t.name || '' });
+const bounds = (t, f) => { const pl = t.pieceLength, o = f.offset || 0; return { pl, a: Math.floor(o / pl), z: Math.floor((o + f.length - 1) / pl) }; };
 
-// حالة التورنت: تُستخدم أيضاً لـ«تسخين» الاتصال قبل التشغيل، فلا يبقى طلب واحد معلقاً دقيقة كاملة (وهو سبب أخطاء 502 خلف الوسطاء)
+// تجهيز الملف: رأس الملف + فهرسه أولاً. lite = تحميل مسبق (أول ~32MB والفهرس فقط)، وإلا الملف كله في الخلفية بعد الأولويات
+function prime(t, f, lite) {
+  const m = touch(t.infoHash), want = lite ? 1 : 2;
+  if ((m.primed || 0) >= want) return;
+  m.primed = want;
+  try {
+    const { pl, a, z } = bounds(t, f);
+    const head = Math.min(z, a + Math.max(1, Math.ceil(3 * MB / pl)) - 1), tail = Math.max(head + 1, z - Math.max(1, Math.ceil(2 * MB / pl)) + 1);
+    t.deselect(0, t.pieces.length - 1, false);       // يلغي التحديد الافتراضي للتورنت كله (حزم المواسم كانت تُحمَّل كاملة)
+    if (lite) { t.select(a, Math.min(z, a + Math.ceil(32 * MB / pl)), 1); if (tail <= z) t.select(tail, z, 1); }
+    else f.select();
+    t.critical(a, head); if (tail <= z) t.critical(tail, z);
+  } catch (e) { console.warn('[prime]', e.message); }
+}
+// نافذة قراءة مسبقة تتبع موضع التشغيل: ~40 ثانية من الفيديو (من معدل البت) بين 8 و96 ميغابايت
+const aheadBytes = (f, dur) => Math.max(8 * MB, Math.min(96 * MB, (dur ? f.length / dur : 1.5e6) * 40));
+function playhead(t, f, from, ahead) {
+  const { pl, a, z } = bounds(t, f), span = Math.max(1, Math.ceil(ahead / pl));
+  let lo = -1, hi = -1;
+  const move = byte => {
+    try {
+      const p = Math.min(z, Math.max(a, Math.floor(((f.offset || 0) + byte) / pl)));
+      if (lo >= 0 && p >= lo && p - lo < Math.ceil(span / 3)) return;      // لم نتقدم بما يكفي لتحريك النافذة
+      const nh = Math.min(z, p + span);
+      t.critical(p, Math.min(nh, p + 2)); t.select(p, nh, 2);
+      if (lo >= 0) t.deselect(lo, hi, 2);
+      lo = p; hi = nh;
+    } catch {}
+  };
+  move(from);
+  return { move, stop() { try { if (lo >= 0) t.deselect(lo, hi, 2); } catch {} lo = -1; } };
+}
+// نفحص الملف (ffprobe) مبكراً بمجرد جاهزية التورنت، فيصل طلب /probe من المتصفح والنتيجة جاهزة
+const selfURL = (ih, fi) => `http://127.0.0.1:${PORT}/torrent?ih=${ih}&fi=${fi ?? ''}`;
+function prefetchProbe(t, ih, fi) {
+  const m = touch(t.infoHash);
+  if (m.preAt && Date.now() - m.preAt < 20000) return;
+  m.preAt = Date.now();
+  pr(selfURL(ih, fi)).catch(() => {});
+}
+
+// حالة التورنت. wait=ثوانٍ: انتظار طويل (long-poll) يرجع فور جاهزية التورنت بدل الاستعلام كل 1.5 ثانية
 async function tstatus(q, res) {
   const t = await ensureTorrent(q.get('ih'), q.getAll('tr'));
+  const m = touch(t.infoHash); m.played = true; m.pre = false;
+  const w = Math.min(+q.get('wait') || 0, 15) * 1e3;
+  if (!t.ready && w) await new Promise(ok => { const d = () => { clearTimeout(to); t.off('ready', d); t.off('error', d); res.off('close', d); ok(); }; const to = setTimeout(d, w); t.once('ready', d); t.once('error', d); res.once('close', d); });
+  if (res.destroyed) return;
   const o = { state: t.ready ? 'ready' : 'connecting', ...tinfo(t) };
-  if (t.ready) { const f = pickFile(t, q.get('fi')); if (f) o.file = { name: f.name, size: f.length, progress: +f.progress.toFixed(4) }; else o.error = 'لا يوجد ملف فيديو في هذا التورنت'; }
+  if (t.ready) {
+    const f = pickFile(t, q.get('fi'));
+    if (f) { prime(t, f, false); prefetchProbe(t, q.get('ih'), q.get('fi')); o.file = { name: f.name, size: f.length, progress: +f.progress.toFixed(4) }; }
+    else o.error = 'لا يوجد ملف فيديو في هذا التورنت';
+  }
   res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
   res.end(JSON.stringify(o));
+}
+// تحميل مسبق هادئ: يتصل بالتورنت ويجلب بدايته وفهرسه قبل أن يضغط المستخدم تشغيل (لا يُرفع منه شيء ويُحذف إن لم يُستخدم)
+async function preload(q, res) {
+  const t = await ensureTorrent(q.get('ih'), q.getAll('tr')), m = touch(t.infoHash);
+  if (!m.played) m.pre = true;
+  res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+  res.end(JSON.stringify({ ok: 1, ...tinfo(t) }));
+  waitReady(t, 90000).then(() => {
+    const f = pickFile(t, q.get('fi'));
+    if (f && !m.played) { prime(t, f, true); prefetchProbe(t, q.get('ih'), q.get('fi')); }
+  }).catch(() => {});
 }
 
 async function torrent(q, req, res) {
   const t = await waitReady(await ensureTorrent(q.get('ih'), q.getAll('tr')), 90000);
   const f = pickFile(t, q.get('fi'));
   if (!f) throw new HttpErr(404, 'لا يوجد ملف فيديو في هذا التورنت');
-  t.files.forEach(x => x !== f && x.deselect());
-  f.select();
+  const m = touch(t.infoHash);
+  prime(t, f, !!m.pre && !m.played);
   const size = f.length, r = req.headers.range;
   let s = 0, e = size - 1;
   if (r) {
-    const m = /^bytes=(\d*)-(\d*)$/.exec(r.trim());
-    if (m && (m[1] || m[2])) {
-      if (m[1] === '') s = Math.max(0, size - +m[2]); else { s = +m[1]; if (m[2] !== '') e = Math.min(+m[2], e); }
+    const x = /^bytes=(\d*)-(\d*)$/.exec(r.trim());
+    if (x && (x[1] || x[2])) {
+      if (x[1] === '') s = Math.max(0, size - +x[2]); else { s = +x[1]; if (x[2] !== '') e = Math.min(+x[2], e); }
     }
     if (s > e || s >= size) { res.writeHead(416, { 'Content-Range': `bytes */${size}` }); return res.end(); }
   }
@@ -121,16 +191,19 @@ async function torrent(q, req, res) {
     ...(r && { 'Content-Range': `bytes ${s}-${e}/${size}` })
   });
   if (req.method === 'HEAD') return res.end();
-  const m = touch(t.infoHash); m.active++;
+  m.active++;
+  const win = playhead(t, f, s, aheadBytes(f, durs.get(tkey(q.get('ih'), q.get('fi')))));
   const st = f.createReadStream({ start: s, end: e });
+  let sent = 0;
+  st.on('data', c => { sent += c.length; win.move(s + sent); });
   st.on('error', () => res.destroy());
   st.pipe(res);
-  res.on('close', () => { st.destroy(); m.active--; touch(t.infoHash); });
+  res.on('close', () => { st.destroy(); win.stop(); m.active--; touch(t.infoHash); });
 }
 // حذف التورنتات الخاملة وملفاتها
 setInterval(() => {
   if (!wt) return;
-  for (const t of [...wt.torrents]) { const m = meta.get(t.infoHash); if ((!m || m.active <= 0) && Date.now() - (m ? m.last : 0) > IDLE) { console.log('حذف تورنت خامل:', t.name || t.infoHash); meta.delete(t.infoHash); t.destroy({ destroyStore: true }, () => {}); } }
+  for (const t of [...wt.torrents]) { const m = meta.get(t.infoHash), lim = m && m.pre && !m.played ? PRE_IDLE : IDLE; if ((!m || m.active <= 0) && Date.now() - (m ? m.last : 0) > lim) { console.log('حذف تورنت خامل:', t.name || t.infoHash); meta.delete(t.infoHash); t.destroy({ destroyStore: true }, () => {}); } }
 }, 60000).unref();
 const cleanup = () => { try { wt && wt.destroy(() => {}); fs.rmSync(TMP, { recursive: true, force: true }); } catch {} process.exit(0); };
 process.on('SIGINT', cleanup); process.on('SIGTERM', cleanup);
@@ -138,7 +211,10 @@ process.on('SIGINT', cleanup); process.on('SIGTERM', cleanup);
 // ---------- فحص الملف ----------
 async function probe(src) {
   await safeSrc(src);
-  const j = JSON.parse(await run('ffprobe', ['-v', 'error', '-analyzeduration', '20M', '-probesize', '20M', '-print_format', 'json', '-show_format', '-show_streams', ...WL, L(src)], 75000));
+  const ffp = async sz => JSON.parse(await run('ffprobe', ['-v', 'error', '-analyzeduration', sz, '-probesize', sz, '-print_format', 'json', '-show_format', '-show_streams', ...WL, L(src)], 75000));
+  // فحص خفيف أولاً (أسرع بكثير على التورنت)، ثم أعمق فقط إن لم نجد فيديو أو كان البث TS بلا صوت
+  let j = await ffp(isSelf(src) ? '6M' : '12M');
+  { const s0 = j.streams || [], fm = (j.format || {}).format_name || ''; if (!s0.some(x => x.codec_type === 'video') || (/mpegts/.test(fm) && !s0.some(x => x.codec_type === 'audio'))) j = await ffp('24M'); }
   const S = j.streams || [], v = S.find(s => s.codec_type === 'video'), F = j.format || {};
   const tag = (s, k) => s.tags && (s.tags[k] || s.tags[k.toUpperCase()]);
   const audio = S.filter(s => s.codec_type === 'audio').map((s, i) => ({ i, lang: tag(s, 'language'), title: tag(s, 'title'), codec: s.codec_name, ch: +s.channels || 2 }));
@@ -156,11 +232,12 @@ async function probe(src) {
   return o;
 }
 const cache = new Map();
-const pr = s => {
-  const c = cache.get(s);
+const pkey = u => { const m = /\/torrent\?(.*)$/.exec(L(u)); if (!m) return String(u); const p = new URLSearchParams(m[1]); return tkey(p.get('ih'), p.get('fi')); };
+const pr = u => {
+  const k = pkey(u), c = cache.get(k);
   if (c && Date.now() - c.t < 30 * 60e3) return c.p;
-  const p = probe(s).catch(e => { cache.delete(s); throw e; });
-  cache.set(s, { p, t: Date.now() });
+  const p = probe(u).then(P => { if (k.startsWith('T|') && P.duration) durs.set(k, P.duration); return P; }).catch(e => { cache.delete(k); throw e; });
+  cache.set(k, { p, t: Date.now() });
   if (cache.size > 60) cache.delete(cache.keys().next().value);
   return p;
 };
@@ -186,8 +263,8 @@ async function play(q, req, res) {
     const vEnc = copyV ? ['-c:v', 'copy', ...(P.vcodec === 'hevc' ? ['-tag:v', 'hvc1'] : [])]
       : hw === 'nvenc' ? ['-c:v', 'h264_nvenc', '-preset', 'p4', '-rc', 'vbr', '-cq', '23', '-b:v', '0', '-g', '48', '-pix_fmt', 'yuv420p']
       : hw === 'vtb' ? ['-c:v', 'h264_videotoolbox', '-b:v', '6M', '-g', '48', '-pix_fmt', 'yuv420p']
-      : ['-c:v', 'libx264', '-preset', 'veryfast', '-crf', '22', '-threads', '0', '-force_key_frames', 'expr:gte(t,n_forced*2)', '-pix_fmt', 'yuv420p'];
-    return ['-v', 'error', '-nostdin', '-fflags', '+genpts', ...WL, '-analyzeduration', '10M', '-probesize', '10M',
+      : ['-c:v', 'libx264', '-preset', 'veryfast', '-crf', '22', '-x264-params', 'rc-lookahead=10', '-threads', '0', '-force_key_frames', 'expr:gte(t,n_forced*2)', '-pix_fmt', 'yuv420p'];
+    return ['-v', 'error', '-nostdin', '-fflags', '+genpts', ...WL, '-analyzeduration', '5M', '-probesize', '5M',
       ...(/^https?:/i.test(src) ? ['-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5', '-rw_timeout', '30000000'] : []),
       '-ss', String(ss), '-i', L(src), '-map', '0:v:0', '-map', `0:a:${P.audio[a] ? a : 0}?`, '-sn', '-dn',
       ...(!copyV && vf.length ? ['-vf', vf.join(',')] : []), ...vEnc,
@@ -256,10 +333,11 @@ async function subproxy(q, res) {
 // ---------- الخادم ----------
 let page = { m: 0, raw: null, gz: null };
 function servePage(req, res) {
-  const f = path.join(__dirname, 'shasha.html'), m = fs.statSync(f).mtimeMs;
-  if (page.m !== m) { page = { m, raw: fs.readFileSync(f), gz: null }; page.gz = zlib.gzipSync(page.raw); }
+  const f = path.join(__dirname, 'shasha.html'), st = fs.statSync(f), m = st.mtimeMs;
+  if (page.m !== m) { page = { m, raw: fs.readFileSync(f), gz: null, tag: '"' + st.size.toString(36) + '-' + Math.floor(m).toString(36) + '"' }; page.gz = zlib.gzipSync(page.raw, { level: 9 }); }
+  if (req.headers['if-none-match'] === page.tag) { res.writeHead(304, { ETag: page.tag, 'Cache-Control': 'no-cache' }); return res.end(); }
   const gz = /\bgzip\b/.test(req.headers['accept-encoding'] || '');
-  res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache', ...(gz && { 'Content-Encoding': 'gzip' }), Vary: 'Accept-Encoding' });
+  res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache', ETag: page.tag, ...(gz && { 'Content-Encoding': 'gzip' }), Vary: 'Accept-Encoding' });
   res.end(gz ? page.gz : page.raw);
 }
 const server = http.createServer(async (req, res) => {
@@ -273,8 +351,9 @@ const server = http.createServer(async (req, res) => {
     switch (u.pathname) {
       case '/': return servePage(req, res);
       case '/ping': return res.end('ok');
-      case '/status': res.setHeader('Content-Type', 'application/json'); return res.end(JSON.stringify({ ok: true, v: 2, caps: CAP, torrents: wt ? wt.torrents.map(t => ({ ih: t.infoHash, ...tinfo(t) })) : null }));
+      case '/status': res.setHeader('Content-Type', 'application/json'); return res.end(JSON.stringify({ ok: true, v: 3, caps: CAP, torrents: wt ? wt.torrents.map(t => ({ ih: t.infoHash, ...tinfo(t) })) : null }));
       case '/tstatus': return await tstatus(q, res);
+      case '/preload': return await preload(q, res);
       case '/torrent': return await torrent(q, req, res);
       case '/probe': { const j = await pr(q.get('src')); res.setHeader('Content-Type', 'application/json'); return res.end(JSON.stringify(j)); }
       case '/play': return await play(q, req, res);
@@ -289,5 +368,6 @@ const server = http.createServer(async (req, res) => {
   }
 });
 server.on('clientError', (e, s) => { try { s.destroy(); } catch {} });
+server.on('connection', s => s.setNoDelay(true));   // بلا تأخير تجميع الحزم: أول بايتات الفيديو تصل أسرع
 server.requestTimeout = 0; server.keepAliveTimeout = 65000;
-server.listen(PORT, () => console.log(`محرك شاشة v2 يعمل: http://localhost:${PORT}`));
+server.listen(PORT, () => console.log(`محرك شاشة v3 يعمل: http://localhost:${PORT}`));
