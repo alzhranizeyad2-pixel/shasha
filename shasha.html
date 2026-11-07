@@ -156,13 +156,13 @@ button{background:none;border:0;cursor:pointer}
 <main id="view"></main>
 <div id="detail" class="hidden"></div><div id="sheet" class="hidden"></div>
 <div id="player" class="hidden idle">
-<video id="v" playsinline></video><div id="sp" class="hidden"></div><div id="lt" class="hidden"></div><div id="dbg" class="hidden"></div><div id="sub"></div>
+<video id="v" playsinline></video><div id="brO"></div><div id="sp" class="hidden"></div><div id="lt" class="hidden"></div><div id="dbg" class="hidden"></div><div id="sub"></div>
 <div id="msg" class="hidden"><div><h2 style="font-weight:900">تعذّر تشغيل الفيديو</h2><p id="mt" style="color:var(--dim);max-width:520px;margin:10px auto 0"></p><button class="btn" id="rt">إعادة المحاولة</button></div></div>
 <div class="ov top"><button class="ib" id="back" aria-label="رجوع"><svg viewBox="0 0 24 24"><path d="M8.6 5.6 15 12l-6.4 6.4-1.4-1.4 5-5-5-5z"/></svg></button><b id="pt"></b><span class="md" id="md"></span><span style="flex:1"></span><button class="ib hidden" id="nx" aria-label="الحلقة التالية (N)"><svg viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6zM16 6h2v12h-2z"/></svg></button></div>
 <div class="ov bot"><div class="cr"><span class="tm" id="ct">0:00</span><input id="seek" type="range" min="0" max="1000" value="0" aria-label="شريط التقدم"><span class="tm" id="dt">0:00</span></div>
 <div class="cr"><button class="ib" id="pp" aria-label="تشغيل"></button><button class="ib" id="b10" aria-label="رجوع 10 ثوان"><svg viewBox="0 0 24 24"><path d="M12 5V2L7 6l5 4V7a6 6 0 1 1-6 6H4a8 8 0 1 0 8-8z"/></svg></button><button class="ib" id="f10" aria-label="تقدم 10 ثوان"><svg viewBox="0 0 24 24"><path d="M12 5V2l5 4-5 4V7a6 6 0 1 0 6 6h2a8 8 0 1 1-8-8z"/></svg></button><button class="ib" id="mu" aria-label="كتم"></button><input id="vol" type="range" min="0" max="1" step=".02" value="1" aria-label="الصوت"><span class="sp"></span>
 <button class="ib" id="bs" aria-label="الترجمة"><svg viewBox="0 0 24 24"><path d="M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zm2 8v2h5v-2zm7 0v2h5v-2zM6 9v2h3V9zm5 0v2h7V9z"/></svg></button><button class="ib" id="bg" aria-label="الإعدادات"><svg viewBox="0 0 24 24"><path d="M19.4 13a7.6 7.6 0 0 0 0-2l2-1.6-2-3.4-2.4 1a7 7 0 0 0-1.7-1L15 3.4h-4l-.4 2.6a7 7 0 0 0-1.7 1l-2.4-1-2 3.4L6.6 11a7.6 7.6 0 0 0 0 2l-2 1.6 2 3.4 2.4-1a7 7 0 0 0 1.7 1l.4 2.6h4l.4-2.6a7 7 0 0 0 1.7-1l2.4 1 2-3.4zM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg></button><button class="ib" id="pip" aria-label="صورة داخل صورة"><svg viewBox="0 0 24 24"><path d="M3 5h18v14H3zm2 2v10h14V7zm7 5h6v4h-6z"/></svg></button><button class="ib" id="fs" aria-label="ملء الشاشة"><svg viewBox="0 0 24 24"><path d="M4 4h6v2H6v4H4zm10 0h6v6h-2V6h-4zM4 14h2v4h4v2H4zm14 0h2v6h-6v-2h4z"/></svg></button></div></div>
-<div class="pn hidden" id="pS"></div><div class="pn hidden" id="pG"></div>
+<div id="hud" class="hidden"></div><div id="kh" class="hidden"><div><h3>اختصارات لوحة المفاتيح</h3>مسافة / K: تشغيل وإيقاف · ← → أو J L: تقديم وترجيع 10 ث (مع Shift: 30 ث) · ↑ ↓: الصوت · 0–9: قفز إلى نسبة · &lt; &gt;: السرعة · , . : إطار بإطار (والفيديو متوقف) · [ ] : نقطتا تكرار A-B · \ : إلغاء A-B · R: تكرار الفيديو · S: لقطة شاشة · F: ملء الشاشة · M: كتم · C: الترجمة · G / H: تأخير الترجمة · D: المعلومات التقنية · N: الحلقة التالية · ?: هذه القائمة</div></div><div class="pn hidden" id="pS"></div><div class="pn hidden" id="pG"></div>
 </div>
 <input type="file" id="fi" accept="video/*,.mkv,.mp4,.m4v,.webm,.mov,.avi,.ts,.srt,.vtt,.ass,.ssa" multiple hidden>
 <div id="tip" class="hidden"></div><div id="toast" class="hidden"></div><div id="drop" class="hidden">اسحب الفيديو أو الترجمة هنا</div>
@@ -416,7 +416,7 @@ function drawG(){const p=$('#pG');let h='<h5>السرعة</h5><div class="ch">'+
  p.querySelectorAll('[data-b]').forEach(b=>b.onclick=()=>{setBoost(+b.dataset.b);drawG()});
  p.querySelectorAll('[data-q]').forEach(b=>b.onclick=()=>{QS.q=+b.dataset.q;LS.s('qs',QS);startSrc(TT());closeP()});
  const nm=$('#nm',p);if(nm)nm.onclick=()=>{QS.nm^=1;LS.s('qs',QS);startSrc(TT());closeP()};
- $('#dbgb',p).onclick=()=>{$('#dbg').classList.toggle('hidden');closeP()};$('#fit',p).onclick=()=>{V.style.objectFit=V.style.objectFit==='cover'?'contain':'cover';drawG()};$('#fit2',p).onclick=()=>{V.style.objectFit=V.style.objectFit==='fill'?'contain':'fill';drawG()}}
+ $('#dbgb',p).onclick=()=>{$('#dbg').classList.toggle('hidden');closeP()};p.insertAdjacentHTML('beforeend',xGHTML());$('#fit',p).onclick=()=>{V.style.objectFit=V.style.objectFit==='cover'?'contain':'cover';drawG()};$('#fit2',p).onclick=()=>{V.style.objectFit=V.style.objectFit==='fill'?'contain':'fill';drawG()}}
 
 /* ---------- المسلسلات: الحلقة التالية ---------- */
 const metaC={};
@@ -523,8 +523,57 @@ style.textContent=`
 .tg.sz{background:#1f2937;color:#9ca3af}
 .tg.bp{background:#15803d;color:#fff}
 #nxt-btn{display:block;width:100%;margin-top:12px}
+#brO{position:absolute;inset:0;background:#000;opacity:0;pointer-events:none}
+#hud{position:absolute;left:50%;top:14%;transform:translateX(-50%);background:rgba(0,0,0,.65);color:#fff;padding:8px 18px;border-radius:999px;font-weight:700;font-size:15px;z-index:70;pointer-events:none;white-space:nowrap;font-variant-numeric:tabular-nums}
+#kh{position:absolute;inset:0;z-index:80;background:rgba(0,0,0,.82);display:flex;align-items:center;justify-content:center;padding:20px;cursor:pointer}
+#kh>div{max-width:600px;background:#111;border:1px solid #333;border-radius:14px;padding:22px;line-height:2;font-size:14px;cursor:default}
+#kh h3{margin:0 0 6px;font-size:18px}
 `;
 document.head.append(style);
+
+/* ---------- تحسينات المشغل: إيماءات اللمس، A-B، مؤقت النوم، لقطة، إطار بإطار، الاختصارات ---------- */
+const brO=$('#brO'),hud=$('#hud'),kh=$('#kh');
+let sleepT=null,sleepMin=0,AB={a:null,b:null,u:''};
+const setBri=v=>{v=Math.max(.25,Math.min(1,v));brO.style.opacity=1-v;LS.s('bri',v)};setBri(LS.g('bri',1));
+function showHud(t){hud.textContent=t;hud.classList.remove('hidden');clearTimeout(hud._t);hud._t=setTimeout(()=>hud.classList.add('hidden'),900)}
+function setSleep(m){clearTimeout(sleepT);sleepT=null;sleepMin=m;if(m>0)sleepT=setTimeout(()=>{V.pause();sleepMin=0;toast('انتهى مؤقت النوم وتم إيقاف التشغيل')},m*60000)}
+function toggleLoop(){V.loop=!V.loop;toast('تكرار الفيديو '+(V.loop?'مفعّل':'متوقف'))}
+function abLoop(){const t=TT();if(AB.a==null||AB.u!==V.dataset.u){AB={a:t,b:null,u:V.dataset.u};return toast('نقطة A: '+fmt(t))}
+ if(AB.b==null){if(t<=AB.a+.5)return toast('ضع النقطة B بعد النقطة A');AB.b=t;return toast('تكرار A-B: '+fmt(AB.a)+' ← '+fmt(t))}
+ AB={a:null,b:null,u:''};toast('أُلغي تكرار A-B')}
+V.addEventListener('timeupdate',()=>{if(AB.b!=null&&AB.u===V.dataset.u&&TT()>=AB.b)seekTo(AB.a,1)});
+function shot(){if(!V.videoWidth)return toast('لا توجد صورة لالتقاطها');try{const c=document.createElement('canvas');c.width=V.videoWidth;c.height=V.videoHeight;c.getContext('2d').drawImage(V,0,0);c.toBlob(b=>{if(!b)return toast('تعذّر حفظ اللقطة');const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=(ctx.title||'shasha').replace(/[\\/:*?"<>|]/g,'')+' '+fmt(TT()).replace(/:/g,'-')+'.png';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),4000);toast('تم حفظ اللقطة')},'image/png')}catch{toast('تعذّر التقاط اللقطة من هذا المصدر')}}
+function xGHTML(){const sl=[[0,'بدون مؤقت'],[15,'15 د'],[30,'30 د'],[60,'60 د']].map(([m,n])=>`<button class="o${sleepMin===m?' on':''}" data-sl="${m}">${n}</button>`).join('');
+ return `<h5>أدوات</h5><div class="ch">${sl}</div><div class="ch"><button class="o${V.loop?' on':''}" data-x="loop">تكرار الفيديو (R)</button><button class="o${AB.a!=null?' on':''}" data-x="ab">${AB.a==null?'تكرار A-B: ضع A':AB.b==null?'A-B: ضع B':'A-B: إلغاء'} ([ ] \\)</button><button class="o" data-x="shot">لقطة شاشة (S)</button><button class="o" data-x="help">الاختصارات (?)</button></div>`}
+$('#pG').addEventListener('click',e=>{const b=e.target.closest('[data-sl],[data-x]');if(!b)return;
+ if(b.dataset.sl!==undefined){setSleep(+b.dataset.sl);toast(sleepMin?'مؤقت النوم: '+sleepMin+' دقيقة':'أُلغي مؤقت النوم')}
+ else{const x=b.dataset.x;if(x==='loop')toggleLoop();else if(x==='ab')abLoop();else if(x==='shot')shot();else if(x==='help'){closeP();kh.classList.remove('hidden');return}}
+ drawG()});
+kh.onclick=e=>{if(e.target===kh)kh.classList.add('hidden')};
+
+/* لمس: تقديم بالسحب الأفقي · صوت (يمين) وسطوع (يسار) بالسحب العمودي · ضغط مطوّل = 2× */
+let gs=null,lpT=null;
+P.addEventListener('touchstart',e=>{const el=e.target;if(e.touches.length!==1||!(el===V||el===P||el.id==='sub'))return;
+ const t=e.touches[0],r=P.getBoundingClientRect();gs={x:t.clientX,y:t.clientY,st:TT(),vol:V.volume,bri:LS.g('bri',1),side:t.clientX>r.left+r.width/2?'r':'l',mode:'',target:null};
+ clearTimeout(lpT);lpT=setTimeout(()=>{if(gs&&!gs.mode){gs.mode='lp';gs.rate=V.playbackRate;V.playbackRate=2;showHud('⏩ 2×')}},500)},{passive:true});
+P.addEventListener('touchmove',e=>{if(!gs||e.touches.length!==1)return;const t=e.touches[0],dx=t.clientX-gs.x,dy=t.clientY-gs.y;
+ if(!gs.mode){if(Math.abs(dx)<14&&Math.abs(dy)<14)return;clearTimeout(lpT);gs.mode=Math.abs(dx)>Math.abs(dy)?'seek':'v'}
+ if(gs.mode==='seek'){const d=DUR()||0,span=Math.min(180,d||180);gs.target=Math.max(0,Math.min(d||1e9,gs.st+dx/P.clientWidth*span));showHud(fmt(gs.target)+' / '+fmt(d))}
+ else if(gs.mode==='v'){const k=-dy/P.clientHeight*1.5;if(gs.side==='r'){V.muted=false;V.volume=Math.max(0,Math.min(1,gs.vol+k));showHud('🔊 '+Math.round(V.volume*100)+'%')}else{setBri(gs.bri+k);showHud('☀ '+Math.round(LS.g('bri',1)*100)+'%')}}},{passive:true});
+P.addEventListener('touchend',()=>{clearTimeout(lpT);if(!gs)return;if(gs.mode==='lp')V.playbackRate=gs.rate;else if(gs.mode==='seek'&&gs.target!=null)seekTo(gs.target,1);gs=null});
+P.addEventListener('touchcancel',()=>{clearTimeout(lpT);if(gs&&gs.mode==='lp')V.playbackRate=gs.rate;gs=null});
+
+/* اختصارات إضافية (مرحلة الالتقاط لتتقدم على القديمة عند الحاجة) */
+addEventListener('keydown',e=>{if(P.classList.contains('hidden')||(/INPUT|TEXTAREA/.test(e.target.tagName)&&e.target.type!=='range')||e.ctrlKey||e.metaKey||e.altKey)return;
+ const k=e.key;
+ if(!kh.classList.contains('hidden')){if(k==='Escape'||k==='?'){kh.classList.add('hidden');e.stopImmediatePropagation();e.preventDefault()}return}
+ if(k===','||k==='.'){if(!V.paused)return;e.preventDefault();seekTo(TT()+(k==='.'?1:-1)/25);return showHud(k==='.'?'إطار ⏭':'⏮ إطار')}
+ if(k==='['||k===']'){e.preventDefault();return abLoop()}
+ if(k==='\\'){e.preventDefault();AB={a:null,b:null,u:''};return toast('أُلغي تكرار A-B')}
+ if(k==='r'||k==='R')return toggleLoop();
+ if(k==='s'||k==='S')return shot();
+ if(k==='?'){e.preventDefault();kh.classList.remove('hidden')}
+},true);
 
 /* ---------- الملفات المحلية ---------- */
 const SUBX=/\.(srt|vtt|ass|ssa)$/i;
